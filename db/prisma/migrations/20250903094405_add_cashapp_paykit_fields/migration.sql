@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE `payment` ADD COLUMN `cashAppCustomerId` VARCHAR(191) NULL,
+    ADD COLUMN `failureReason` VARCHAR(191) NULL,
+    ADD COLUMN `paymentIntentId` VARCHAR(191) NULL,
+    ADD COLUMN `transactionId` VARCHAR(191) NULL,
+    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    ADD COLUMN `webhookEventId` VARCHAR(191) NULL;

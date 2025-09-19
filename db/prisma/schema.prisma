@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  fullName       String
+  email          String          @unique
+  phoneNumber    String?
+  passwordHash   String
+  role           UserRole        @default(BORROWER)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+    
+  lenderTerms    LenderTerm[]    @relation("LenderTerms")
+  loansBorrowed  Loan[]          @relation("BorrowerLoans")
+  loansLent      Loan[]          @relation("LenderLoans")
+  lenderRelationships  Relationship[] @relation("LenderRelationships")
+  borrowerRelationships Relationship[] @relation("BorrowerRelationships")
+  auditLogs      AuditLog[]
+  notifications  Notification[]  @relation("UserNotifications")
+  paymentAccounts PaymentAccount[] @relation("UserPaymentAccounts")
+}
+
+enum UserRole {
+  LENDER
+  BORROWER
+  ADMIN
+}
+
+model Relationship {
+  id          String   @id @default(cuid())
+  lenderId    String
+  borrowerId  String
+  status      RelationshipStatus @default(CONFIRMED)
+  createdAt   DateTime @default(now())
+
+  lender      User     @relation("LenderRelationships", fields: [lenderId], references: [id], onDelete: Cascade)
+  borrower    User     @relation("BorrowerRelationships", fields: [borrowerId], references: [id], onDelete: Cascade)
+
+  @@unique([lenderId, borrowerId])
+}
+
+enum RelationshipStatus {
+  PENDING
+  CONFIRMED
+  BLOCKED
+}
+
+model LenderTerm {
+  id               String   @id @default(cuid())
+  lenderId         String
+  maxLoanAmount    Float
+  loanMultiple     Float    @default(10)
+  maxPaybackDays   Int
+  feePer10Short    Float
+  feePer10Long     Float
+  allowMultipleLoans Boolean @default(false)
+  inviteToken      String   @unique
+  preferredPaymentMethods String? // JSON string of preferred payment methods
+  requireMatchingPaymentMethod Boolean @default(true) // Require borrower to have matching payment method
+  createdAt        DateTime @default(now())
+
+  lender           User     @relation("LenderTerms", fields: [lenderId], references: [id], onDelete: Cascade)
+  loans            Loan[]   @relation("LoanTerms")
+}
+
+model Loan {
+  id               String   @id @default(cuid())
+  lenderId         String
+  borrowerId       String
+  lenderTermId     String?
+  amount           Float
+  dateBorrowed     DateTime
+  paybackDate      DateTime
+  feeAmount        Float
+  totalPayable     Float
+  status           LoanStatus @default(PENDING)
+  health           LoanHealth @default(GOOD)
+  agreementText    String
+  signedBy         String
+  signedDate       DateTime
+  agreedPaymentMethod     PaymentMethod?   // NEW: final payment method agreed by borrower
+  agreedPaymentAccountId  String?          // NEW: the borrower's PaymentAccount chosen
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  agreedPaymentAccount    PaymentAccount?  @relation("LoanAgreedPaymentAccount", fields: [agreedPaymentAccountId], references: [id])
+  lender           User       @relation("LenderLoans", fields: [lenderId], references: [id], onDelete: Cascade)
+  borrower         User       @relation("BorrowerLoans", fields: [borrowerId], references: [id], onDelete: Cascade)
+  lenderTerm       LenderTerm? @relation("LoanTerms", fields: [lenderTermId], references: [id])
+  payments         Payment[]
+  notifications    Notification[] @relation("LoanNotifications")
+}
+
+enum LoanStatus {
+  PENDING
+  FUNDED
+  ACTIVE
+  DENIED
+  OVERDUE
+  COMPLETED
+}
+
+enum LoanHealth {
+  GOOD
+  BEHIND
+  FAILING
+  DEFAULTED
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  loanId                String
+  amount                Float
+  paymentDate           DateTime
+  method                PaymentMethod
+  confirmed             Boolean       @default(false)
+  payerRole             UserRole      @default(LENDER)
+  receiverRole          UserRole      @default(BORROWER)
+  fromAccountId         String?
+  toAccountId           String?
+  transferStatus        TransferStatus @default(PENDING)
+  stripePaymentIntentId String?
+  cashAppTransactionId  String?       // For storing CashApp transaction reference
+  confirmationNote      String?       // For storing user confirmation notes
+  confirmationScreenshot String?      // For storing screenshot upload path
+  manualConfirmationStatus ManualConfirmationStatus @default(NONE) // For manual confirmation workflow
+  lenderConfirmed       Boolean       @default(false) // Lender confirmation for manual payments
+  borrowerConfirmed     Boolean       @default(false) // Borrower confirmation for manual payments
+  createdAt             DateTime      @default(now())
+
+  loan                  Loan          @relation(fields: [loanId], references: [id])
+  fromAccount           PaymentAccount? @relation("PaymentFromAccount", fields: [fromAccountId], references: [id])
+  toAccount             PaymentAccount? @relation("PaymentToAccount", fields: [toAccountId], references: [id])
+}
+
+enum PaymentMethod {
+  CASHAPP
+  PAYPAL
+  ZELLE
+  INTERNAL_WALLET
+}
+
+enum TransferStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ManualConfirmationStatus {
+  NONE              // For automated payments (PayPal, Internal Wallet)
+  PENDING_UPLOAD    // Waiting for screenshot/proof upload
+  PENDING_CONFIRMATION // Waiting for dual confirmation
+  CONFIRMED         // Both parties confirmed
+  DISPUTED          // Confirmation disputed
+}
+
+model PaymentAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  accountType     PaymentMethod
+  cashAppHandle   String?
+  paypalEmail     String?  // Add PayPal email field
+  accountNickname String?
+  isDefault       Boolean  @default(false)
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation("UserPaymentAccounts", fields: [userId], references: [id], onDelete: Cascade)
+  paymentsFrom    Payment[] @relation("PaymentFromAccount")
+  paymentsTo      Payment[] @relation("PaymentToAccount")
+  agreedLoans     Loan[]  @relation("LoanAgreedPaymentAccount")
+
+  @@unique([userId, cashAppHandle])
+  @@unique([userId, paypalEmail])
+  @@index([userId, accountType])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String
+  details     String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id],onDelete: Cascade)
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  loanId      String?
+  type        NotificationType
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  loan        Loan?    @relation("LoanNotifications", fields: [loanId], references: [id])
+}
+
+enum NotificationType {
+  PAYMENT_OVERDUE
+  PAYMENT_CONFIRMED
+  LOAN_REQUEST
+  LOAN_APPROVED
+  LOAN_DENIED
+  LOAN_FUNDED
+}
+
