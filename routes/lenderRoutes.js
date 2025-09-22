@@ -159,7 +159,7 @@ router.put("/terms/payment-preference/:id", verifyToken, async (req, res) => {
         const { id } = req.params
         const { preferredPaymentMethods, requireMatchingPaymentMethod } = req.body;
 
-        console.log(preferredPaymentMethods, requireMatchingPaymentMethod );
+        // console.log(preferredPaymentMethods, requireMatchingPaymentMethod );
         
 
         // Validate required fields
