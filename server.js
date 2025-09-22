@@ -29,7 +29,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Serve uploaded files
-app.use('/uploads', express.static('uploads')));
+app.use('/uploads', express.static('uploads'));
 
 // If you send form-urlencoded data
 app.use(express.urlencoded({ extended: true }));
