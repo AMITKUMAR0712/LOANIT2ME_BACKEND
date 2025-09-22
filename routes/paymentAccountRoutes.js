@@ -26,16 +26,16 @@ router.post("/", verifyToken, async (req, res) => {
         // Validate account type specific fields
         if (accountType === 'CASHAPP') {
             if (!cashAppHandle || !cashAppHandle.startsWith('$')) {
-                return res.status(400).json({ 
-                    error: "CashApp handle must start with $ (e.g., $johndoe)" 
+                return res.status(400).json({
+                    error: "CashApp handle must start with $ (e.g., $johndoe)"
                 });
             }
         }
 
         if (accountType === 'PAYPAL') {
             if (!paypalEmail || !paypalEmail.includes('@')) {
-                return res.status(400).json({ 
-                    error: "Please provide a valid PayPal email address" 
+                return res.status(400).json({
+                    error: "Please provide a valid PayPal email address"
                 });
             }
         }
@@ -43,7 +43,7 @@ router.post("/", verifyToken, async (req, res) => {
         // If setting as default, remove default from other accounts
         if (isDefault) {
             await prisma.paymentAccount.updateMany({
-                where: { 
+                where: {
                     userId: req.userId,
                     accountType: accountType
                 },
@@ -93,7 +93,7 @@ router.put("/:id", verifyToken, async (req, res) => {
         // If setting as default, remove default from other accounts
         if (isDefault) {
             await prisma.paymentAccount.updateMany({
-                where: { 
+                where: {
                     userId: req.userId,
                     accountType: account.accountType,
                     id: { not: id }
@@ -139,5 +139,29 @@ router.delete("/:id", verifyToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+router.post("/preffered-method", verifyToken, async (req, res) => {
+
+    try {
+        const { userId, method } = req.body
+
+        const account = await prisma.paymentAccount.findFirst({
+            where: {
+                userId: userId,
+                accountType:method
+            }
+        })
+        if (method == "CASHAPP") {
+            res.json(account.cashAppHandle)
+        }
+        else if (method == "PAYPAL") {
+            res.json(account.paypalEmail)
+        }
+    } catch (error) {
+        console.error('Error getting payment id:', error);
+        res.status(500).json({ message: "Failed to getting id" });
+    }
+});
+
 
 export default router;
