@@ -140,7 +140,7 @@ router.post("/loans", verifyToken, async (req, res) => {
             }
         });
 
-        console.log(loan);
+        // console.log(loan);
         
 
         // Log loan request creation
@@ -323,7 +323,7 @@ router.post("/payment/payment-method", verifyToken, async (req, res) => {
         const borrowerId = req.userId;
         const { paymentMethod } = req.body;
 
-        console.log("Borrower:", borrowerId, "Method:", paymentMethod);
+        // console.log("Borrower:", borrowerId, "Method:", paymentMethod);
 
         const payment = await prisma.paymentAccount.findFirst({
             where: {
