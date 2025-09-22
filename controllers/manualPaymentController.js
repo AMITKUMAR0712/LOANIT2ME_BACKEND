@@ -3,6 +3,8 @@ import { logActivity, AuditActions, createLogDetails } from '../utils/auditLogge
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+// import { v2 as cloudinary } from "cloudinary";
+
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -19,8 +21,21 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+
+
+// // uncomment to use cloudinary for storing images
+// cloudinary.config({
+//   cloud_name: process.env.CLOUD_NAME,
+//   api_key: process.env.CLOUD_API_KEY,
+//   api_secret: process.env.CLOUD_API_SECRET,
+// });
+
+
+
+
+const upload = multer({
   storage: storage,
+  // storage: multer.memoryStorage(),     // uncommment for storage in cloudinary memory
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
@@ -33,6 +48,7 @@ const upload = multer({
 
 export const uploadScreenshot = upload.single('screenshot');
 
+// Upload image to local disk and return URL
 export const handleScreenshotUpload = async (req, res) => {
   try {
     if (!req.file) {
@@ -40,7 +56,7 @@ export const handleScreenshotUpload = async (req, res) => {
     }
 
     const filePath = req.file.path;
-    
+
     res.json({ 
       success: true, 
       message: 'Screenshot uploaded successfully',
@@ -51,6 +67,33 @@ export const handleScreenshotUpload = async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to upload screenshot' });
   }
 };
+
+
+// // Upload image to Cloudinary and return URL
+// export const handleScreenshotUpload = async (req, res) => {
+//   try {
+//     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+//     const buffer = req.file.buffer;
+
+//     const result = await new Promise((resolve, reject) => {
+//       const stream = cloudinary.uploader.upload_stream(
+//         { folder: 'payment-screenshots' },
+//         (error, result) => {
+//           if (error) reject(error);
+//           else resolve(result);
+//         }
+//       );
+//       stream.end(buffer);
+//     });
+
+//     // Return the Cloudinary URL
+//     res.json({ success: true, message: 'Screenshot uploaded successfully', filePath: result.secure_url });
+//   } catch (error) {
+//     console.error('Error uploading screenshot:', error);
+//     res.status(500).json({ success: false, message: 'Failed to upload screenshot' });
+//   }
+// };
 
 export const submitManualProof = async (req, res) => {
   try {
@@ -122,8 +165,8 @@ export const submitManualProof = async (req, res) => {
       }
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Payment proof submitted successfully',
       payment: updatedPayment
     });
@@ -171,7 +214,7 @@ export const confirmManualPayment = async (req, res) => {
 
     // Determine the overall status
     const otherUserConfirmed = userRole === 'LENDER' ? payment.borrowerConfirmed : payment.lenderConfirmed;
-    
+
     if (!confirmed) {
       // If disputed, mark as disputed
       updateData.manualConfirmationStatus = 'DISPUTED';
@@ -233,7 +276,7 @@ export const confirmManualPayment = async (req, res) => {
           where: { id: payment.loanId },
           include: { payments: true }
         });
-        
+
         // Calculate total of all confirmed repayment payments
         const totalRepaid = loanWithPayments.payments
           .filter(p => p.confirmed && p.payerRole === 'BORROWER' && p.receiverRole === 'LENDER')
@@ -268,7 +311,7 @@ export const confirmManualPayment = async (req, res) => {
 
     // Create notifications
     const otherUserId = userRole === 'LENDER' ? payment.loan.borrowerId : payment.loan.lenderId;
-    
+
     if (updateData.manualConfirmationStatus === 'CONFIRMED') {
       // Notify both parties that payment is fully confirmed
       await prisma.notification.createMany({
@@ -313,8 +356,8 @@ export const confirmManualPayment = async (req, res) => {
       });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Payment ${confirmed ? 'confirmed' : 'disputed'} successfully`,
       payment: updatedPayment
     });
@@ -346,8 +389,8 @@ export const getPaymentDetails = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment not found' });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       payment
     });
   } catch (error) {
@@ -371,9 +414,9 @@ export const validatePaymentMethods = async (req, res) => {
 
     // If no preferred methods are set or matching not required, allow all
     if (!lenderTerm.preferredPaymentMethods || !lenderTerm.requireMatchingPaymentMethod) {
-      return res.json({ 
-        success: true, 
-        valid: true, 
+      return res.json({
+        success: true,
+        valid: true,
         message: 'All payment methods allowed'
       });
     }
@@ -388,16 +431,16 @@ export const validatePaymentMethods = async (req, res) => {
     }
 
     if (preferredMethods.length === 0) {
-      return res.json({ 
-        success: true, 
-        valid: true, 
+      return res.json({
+        success: true,
+        valid: true,
         message: 'No preferred payment methods set'
       });
     }
 
     // Get borrower's payment accounts
     const borrowerAccounts = await prisma.paymentAccount.findMany({
-      where: { 
+      where: {
         userId: borrowerId,
         isVerified: true
       }
@@ -407,12 +450,12 @@ export const validatePaymentMethods = async (req, res) => {
     const borrowerMethods = borrowerAccounts.map(account => account.accountType);
     const hasMatchingMethod = preferredMethods.some(method => borrowerMethods.includes(method));
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       valid: hasMatchingMethod,
       preferredMethods,
       borrowerMethods,
-      message: hasMatchingMethod 
+      message: hasMatchingMethod
         ? 'Borrower has matching payment method'
         : 'Borrower does not have any of the preferred payment methods'
     });
